@@ -166,7 +166,6 @@ ui <- fluidPage(
 server <- function(input, output,session) {
   session$onSessionEnded(stopApp)
   Phy=reactive({
-    req(input$ftype)
     req(input$phyObj)
     readRDS(input$phyObj$datapath)
   })
