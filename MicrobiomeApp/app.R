@@ -685,10 +685,6 @@ gg
   ancpt.r=reactive({
     ggw=anctb.r()
     gen.vec=t(unique(ggw[,1]))
-    if (length(gen.vec)==0){
-      dlg_message("No differential taxa")$res
-    }
-    else{
     phy.3.R <- tax_glom(phy.list()[[2]], taxrank=input$tax)
     phy.3.meta=data.table(psmelt(phy.3.R))
     phy.3.meta$tax1=phy.3.meta%>% select(input$tax)
@@ -704,7 +700,7 @@ gg
       geom_col(position="dodge")  + 
       labs(x=paste(input$tax), y=" Mean Relative abundance") +
       facet_wrap(~tax1,scale="free")
-  }})
+  })
   output$anc.tb=renderTable({
     if (input$dispy=="tab")
       anctb.r()
