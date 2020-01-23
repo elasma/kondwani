@@ -80,7 +80,7 @@ ui <- fluidPage(
                       helpText("Select a grouping variable under 'Groupby'"),
                       tableOutput("DM")),
              "Differential Taxa",
-             tabPanel("Kruskal Wallis",  selectInput("tax", 
+             tabPanel("Kruskal Wallis",  radioButtons("tax", 
                                   label = "Choose taxanomic level",
                                   choices = c("Phylum", 
                                               "Order",
@@ -123,7 +123,7 @@ ui <- fluidPage(
              #  tableOutput("kwt.wx"),
              #  plotOutput("kwp.wx",width="600px")
              # ),
-         tabPanel("Negative Binomial",  selectInput("tax", 
+         tabPanel("Negative Binomial",  radioButtons("tax", 
                     label = "Choose taxanomic level",
                     choices = c("Phylum", 
                                 "Order",
@@ -132,7 +132,7 @@ ui <- fluidPage(
                                 "Genus",
                                 "Species"),
                     selected = "Genus"),
-                  selectInput("dispy",label = "Display results as",
+                  radioButtons("dispy",label = "Display results as",
                               choices = list("Table"="tab",
                                              "Graphs"="gph")),
                   #uiOutput("grpselect"),
@@ -143,7 +143,7 @@ ui <- fluidPage(
                   plotOutput("nb.pt",width="600px")
          ),
          tabPanel("ANCOM", 
-                  selectInput("tax", 
+                  radioButtons("tax", 
                                     label = "Choose taxanomic level",
                                     choices = c("Phylum", 
                                                 "Order",
@@ -369,31 +369,36 @@ else
     output$regress=renderTable({
         reg.res()
     })
-    output$perm=renderTable({
+    #PERMANOVA
+    perm.r=reactive({
       adf=phy.list()[[4]]%>% select(SampleID,input$tblvar)
       adf$grpvar=as.factor(adf[,2])
       adf$grpvar=as.character(adf$grpvar)
-      sample_data(phy.list()[[3]])$grpvar=adf$grpvar
-    physeq.m1=phyloseq::subset_samples(phy.list()[[3]], !is.na(grpvar))
-    sub.meta=meta(physeq.m1)
-    adf=sub.meta%>% select(SampleID,grpvar)
-    adf$grpvar=as.factor(adf[,2])
-    bray_dist_tp <- vegdist(otu_table(physeq.m1))
+      phy.sub=phy.list()[[3]]
+      sample_data(phy.sub)$grpvar=adf$grpvar
+      physeq.m1=phyloseq::subset_samples(phy.sub, !is.na(grpvar))
+      sub.meta=meta(physeq.m1)
+      adf=sub.meta%>% select(SampleID,grpvar)
+      adf$grpvar=as.factor(adf[,2])
+      bray_dist_tp <- vegdist(otu_table(physeq.m1))
       if (length(levels(adf$grpvar))<3)
-        {
+      {
         adm=adonis(bray_dist_tp ~ grpvar, data =adf)
         ad=summary(adm)
         ad=adm$aov.tab
         head(ad)
         as.data.table(cbind(ad[1],ad[2],ad[3],ad[4]),keep.rownames = TRUE)
-        }
+      }
       else{
         adm=adonis(bray_dist_tp ~ grpvar, data =adf)
         ad=summary(adm)
         ad=adm$aov.tab
         head(ad)
         as.data.table(cbind(ad[1],ad[2],ad[3],ad[4]),keep.rownames = TRUE)
-       pairwise.adonis(otu_table(physeq.m1), adf$grpvar, sim.method = "bray")}
+        pairwise.adonis(otu_table(physeq.m1), adf$grpvar, sim.method = "bray")}
+    })
+    output$perm=renderTable({
+      perm.r()
     })
   DMr=reactive({
     #Dirichlet-multinomial Model
@@ -401,7 +406,8 @@ else
     adf$grpvar=as.factor(adf[,2])
     lv=levels(adf$grpvar)
     adf$grpvar=as.character(adf$grpvar)
-    sample_data(phy.list()[[3]])$grpvar=adf$grpvar
+    phy.sub=phy.list()[[3]]
+    sample_data(phy.sub$grpvar)=adf$grpvar
     gg=function(i) {
       keepTaxa3 =adf[which(adf$grpvar==i),]
       miss_samples1=rownames(keepTaxa3)
