@@ -12,7 +12,7 @@ check.packages.bioc <- function(pkg){
   sapply(pkg, require, character.only = TRUE)
 }
 check.packages(c("devtools","BiocManager"))
-PkgsBioC=c("DESeq2","dada2","phyloseq", "phangorn", "edgeR", "limma", "metagenomeSeq","DECIPHER",
+PkgsBioC=c("DESeq2","phyloseq", "phangorn", "edgeR", "limma", "metagenomeSeq","DECIPHER",
            "DirichletMultinomial","coin")
 check.packages.bioc(PkgsBioC)
 packs= c ("TMB","ggplot2" ,"svDialogs", "lme4" , "zCompositions" , "lattice" , "igraph" , "reshape2" ,"vegan",
