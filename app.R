@@ -1,4 +1,5 @@
-#setwd("~/Documents/Consult/Milk/Analysis/Microbiome/ubiome2")
+setwd("~/Documents/Consult/Milk/Analysis/Microbiome/ubiome2")
+source("Packages.R")
 source("libs.R")
 source("ANCOM_updated_code.R")
 source("permanova.R")
@@ -88,35 +89,40 @@ ui <- fluidPage(
                                               "Genus",
                                               "Species"),
                                   selected = "Genus"),
-                      selectInput("dis",label = "Display results as",
+                      radioButtons("dis",label = "Display results as",
                                    choices = list("Table"="tab",
                                                   "Graphs"="gph")),
-                      #uiOutput("grpselect"),
+                      selectInput("padj", 
+                                  label = "Adjust pvalue?",
+                                  choices = c("holm", "hochberg", "hommel", "bonferroni", "BH", "BY",
+                                     "fdr", "none"),
+                                  selected = "fdr"),
+                      helpText("Choose method to adjust pvalue for multiple comparisons"),
                       helpText("Select a grouping variable under 'Groupby'"),
-                      sliderInput("num","choose value of alpha", value = 0.1,
-                                   min=0,max=1,step = 0.001),
+                      numericInput("num","choose value of alpha", value = 0.0001,
+                                   min=0,max=1),
                       tableOutput("kwt"),
                       plotOutput("kwp",width="600px")
                       ),
-             tabPanel("Wilcoxon rank",  selectInput("tax", 
-                     label = "Choose taxanomic level",
-                               choices = c("Phylum", 
-                                           "Order",
-                                           "Class", 
-                                           "Family",
-                                           "Genus",
-                                           "Species"),
-                               selected = "Genus"),
-                     selectInput("dispy",label = "Display results as",
-                           choices = list("Table"="tab",
-                                          "Graphs"="gph")),
-                     #uiOutput("grpselect"),
-              helpText("Select a grouping variable under 'Groupby'"),
-              sliderInput("num","choose value of alpha", value = 0.1,
-                           min=0,max=1,step = 0.001),
-              tableOutput("kwt.wx"),
-              plotOutput("kwp.wx",width="600px")
-             ),
+             # tabPanel("Wilcoxon rank",  selectInput("tax", 
+             #         label = "Choose taxanomic level",
+             #                   choices = c("Phylum", 
+             #                               "Order",
+             #                               "Class", 
+             #                               "Family",
+             #                               "Genus",
+             #                               "Species"),
+             #                   selected = "Genus"),
+             #         selectInput("dispy",label = "Display results as",
+             #               choices = list("Table"="tab",
+             #                              "Graphs"="gph")),
+             #         #uiOutput("grpselect"),
+             #  helpText("Select a grouping variable under 'Groupby'"),
+             #  sliderInput("num","choose value of alpha", value = 0.1,
+             #               min=0,max=1,step = 0.001),
+             #  tableOutput("kwt.wx"),
+             #  plotOutput("kwp.wx",width="600px")
+             # ),
          tabPanel("Negative Binomial",  selectInput("tax", 
                     label = "Choose taxanomic level",
                     choices = c("Phylum", 
@@ -126,12 +132,12 @@ ui <- fluidPage(
                                 "Genus",
                                 "Species"),
                     selected = "Genus"),
-                  selectInput("dispy",label = "Display results as",
+                  radioButtons("dispy",label = "Display results as",
                               choices = list("Table"="tab",
                                              "Graphs"="gph")),
                   #uiOutput("grpselect"),
                   helpText("Select a grouping variable under 'Groupby'"),
-                  sliderInput("num","choose value of alpha", value = 0.1,
+                  numericInput("num","choose value of alpha", value = 0.0001,
                                min=0,max=1,step=0.001),
                   tableOutput("nb.tb"),
                   plotOutput("nb.pt",width="600px")
@@ -146,13 +152,13 @@ ui <- fluidPage(
                                                 "Genus",
                                                 "Species"),
                                     selected = "Genus"),
-                  selectInput("dispy",label = "Display results as",
+                  radioButtons("dispy",label = "Display results as",
                               choices = list("Table"="tab",
                                              "Graphs"="gph")),
                   #uiOutput("grpselect"),
                   helpText("Select a grouping variable under 'Groupby'"),
-                  sliderInput("ancAlpha","choose value of alpha", value = 0.1,
-                              min=0,max=1,step=0.001),
+                  numericInput("ancAlpha","choose value of alpha", value = 0.001,
+                              min=0,max=1),
                   tableOutput("anc.tb"),
                   plotOutput("anc.pt",width="600px")
          ) ,id="nav")
@@ -165,7 +171,6 @@ ui <- fluidPage(
 server <- function(input, output,session) {
   session$onSessionEnded(stopApp)
   Phy=reactive({
-    req(input$ftype)
     req(input$phyObj)
     readRDS(input$phyObj$datapath)
   })
@@ -196,18 +201,20 @@ server <- function(input, output,session) {
     output$abPlot <- renderPlot({
         if(input$gp=="geom_bar")
         {
+          
         ff1=function(cc,st){
             cc1=enquo(cc)
             st1=paste(st)
-            physeq3 <- tax_glom(phy.list()[[2]], taxrank=cc)
+            physeq3 <- tax_glom(phy.list()[[2]], taxrank=input$var)
             dat.phy=data.table(psmelt(physeq3))
+            dat.phy$tax1=dat.phy%>% select(input$var)
             # create dataframe from phyloseq object
-            dat.phy1=dat.phy %>% select(Abundance,noquote(eval(cc))) %>% 
-                group_by_(eval(cc)) %>% filter(Abundance>0) %>%
+            dat.phy1=dat.phy %>% select(Abundance,tax1) %>% 
+                group_by(tax1) %>% filter(Abundance>0) %>%
                 summarise_at("Abundance",eval(substitute(st1))) 
             dat.phy1=setorder(dat.phy1,-Abundance)
             dat.phy1=dat.phy1[1:5,]
-            ggplot(dat.phy1,aes(x=get(cc),y=Abundance)) +
+            ggplot(dat.phy1,aes(x=tax1,y=Abundance)) +
                 geom_bar(stat = "identity",position="dodge")  + 
                 labs(x=paste(cc), y=paste(st1, "relative abundance"))
         }
@@ -270,8 +277,8 @@ else
         t4long=reshape(as.data.frame(t4), varying = time.vars,v.names =long.vars,
                        times=c("Chao","Shannon","InvSimpson"),direction ="long")
         t4long$Measure=t4long$time
-        t4long$timepoint="overall"
-        t4l=t4long %>% select(Measure,timepoint,median, mean,min,max)
+        t4long$ungrouped="overall"
+        t4l=t4long %>% select(Measure,ungrouped,median, mean,min,max)
         rownames(t4l)=NULL
         t4l     
     })
@@ -301,8 +308,6 @@ else
 
    })
   }
-
-
     
     reg.res=reactive({
         
@@ -366,42 +371,51 @@ else
     output$regress=renderTable({
         reg.res()
     })
-    output$perm=renderTable({
+    #PERMANOVA
+    perm.r=reactive({
       adf=phy.list()[[4]]%>% select(SampleID,input$tblvar)
       adf$grpvar=as.factor(adf[,2])
       adf$grpvar=as.character(adf$grpvar)
-      sample_data(phy.list()[[3]])$grpvar=adf$grpvar
-    physeq.m1=phyloseq::subset_samples(phy.list()[[3]], !is.na(grpvar))
-    sub.meta=meta(physeq.m1)
-    adf=sub.meta%>% select(SampleID,grpvar)
-    adf$grpvar=as.factor(adf[,2])
-    bray_dist_tp <- vegdist(otu_table(physeq.m1))
+      phy.sub=phy.list()[[3]]
+      sample_data(phy.sub)$grpvar=adf$grpvar
+      physeq.m1=phyloseq::subset_samples(phy.sub, !is.na(grpvar))
+      sub.meta=meta(physeq.m1)
+      adf=sub.meta%>% select(SampleID,grpvar)
+      adf$grpvar=as.factor(adf[,2])
+      bray_dist_tp <- vegdist(otu_table(physeq.m1))
       if (length(levels(adf$grpvar))<3)
-        {
+      {
         adm=adonis(bray_dist_tp ~ grpvar, data =adf)
         ad=summary(adm)
         ad=adm$aov.tab
         head(ad)
         as.data.table(cbind(ad[1],ad[2],ad[3],ad[4]),keep.rownames = TRUE)
-        }
+      }
       else{
         adm=adonis(bray_dist_tp ~ grpvar, data =adf)
         ad=summary(adm)
         ad=adm$aov.tab
         head(ad)
         as.data.table(cbind(ad[1],ad[2],ad[3],ad[4]),keep.rownames = TRUE)
-       pairwise.adonis(otu_table(physeq.m1), adf$grpvar, sim.method = "bray")}
+        pairwise.adonis(otu_table(physeq.m1), adf$grpvar, sim.method = "bray")}
+    })
+    output$perm=renderTable({
+      perm.r()
     })
   DMr=reactive({
     #Dirichlet-multinomial Model
-    adf=phy.list()[[4]]%>% select(SampleID,input$tblvar)
+    adf=meta(phy.list()[[3]])
+    adf=adf %>% select(SampleID,input$tblvar)
     adf$grpvar=as.factor(adf[,2])
     lv=levels(adf$grpvar)
-    adf$grpvar=as.character(adf$grpvar)
-    sample_data(phy.list()[[3]])$grpvar=adf$grpvar
+    lvv=as.list(lv)
+    adf$grpvar1=as.character(adf$grpvar)
+    #sample_data(phy.list()[[3]])$grpvar=adf$grpvar
     gg=function(i) {
-      keepTaxa3 =adf[which(adf$grpvar==i),]
+      j=lv[i]
+      keepTaxa3 =adf %>% filter(grpvar ==i)
       miss_samples1=rownames(keepTaxa3)
+      print(head(miss_samples1))
      c.1= prune_samples(sample_names(phy.list()[[3]]) %in% miss_samples1,phy.list()[[3]])
      sub.otu=as(otu_table(c.1),"matrix")
      return(sub.otu)
@@ -420,7 +434,7 @@ else
     DMr()
   })
  kwtr=reactive({
-   phy.3.R <- tax_glom(phy.list()[[2]], taxrank=input$tax)
+   phy.3.R <- tax_glom(Phy(), taxrank=input$tax)
    p3.meta= meta(phy.3.R)
    p3.taxn=colnames(tax_table(phy.3.R))
    indx=match(input$tax,p3.taxn)
@@ -429,39 +443,68 @@ else
      p3.otu=otu_table(phy.3.R)
      phy.3.R=phyloseq(otu_table(p3.otu,taxa_are_rows =FALSE),sample_data(p3.meta),tax_table(p3.tax))
    }
-    adf=p3.meta%>% select(SampleID,input$tblvar)
-    adf$grpvar=as.factor(adf[,2])
-    lv=levels(adf$grpvar)
-    sample_data(phy.3.R)$grpvar=adf$grpvar  
-    combs=combn(lv,2) 
-    nlv=c(1:(ncol(combs)))
-    fwfn=function(i){
-      kw=test_differential_abundance_Kruskal(
-        phy.3.R, group = "grpvar", 
-       compare=combs[,i],p.adjust.method = "fdr")  
-      kwt=kw$table 
-      kwt$compare=paste(combs[,i],collapse = " vs ")
-      kwt=kwt%>%select(compare,Taxon,padj,input$tax)%>%filter(padj <input$num)
-      
-    }
+   #print(meta(phy.3.R)[1:5,1:3])
+   pmeta=meta(phy.3.R)
+   adf=pmeta%>% select(SampleID,input$tblvar)
+   adf$grpvar=as.factor(adf[,2])
+   lv=levels(adf$grpvar)
+   sample_data(phy.3.R)$grpvar=adf$grpvar  
+   
+   combs=combn(lv,2) 
+   nlv=c(1:(ncol(combs)))
+   pmeta=meta(phy.3.R)
+   fwfn=function(i){
+     keepTaxa3 =pmeta[which(pmeta$grpvar %in% combs[,i]),]
+     miss_samples1=rownames(keepTaxa3)
+     phy_sub= prune_samples(sample_names(phy.3.R) %in% miss_samples1,phy.3.R)
+     otu.df=as(otu_table(phy_sub),"matrix")
+     Sample.ID=rownames(otu.df)
+     rownames(otu.df)=NULL
+     Group=as.factor(sample_data(phy_sub)$grpvar)
+     vardata=cbind(Sample.ID,Group)
+     
+     wx=function(i){pairwise.wilcox.test(i, vardata[,2], p.adjust.method = input$padj)}
+     wx.list=apply(otu.df, 2,wx)
+     wx.list2=lapply(wx.list, function(i){i[3]})
+     wx.list3=lapply(wx.list2, function(i){i<input$num})
+     wx.list3=as.matrix(wx.list3)
+     wx.list4=unlist(wx.list2)
+     names(wx.list4)=NULL
+     wx.res=as.data.table(cbind(wx.list3,wx.list4),keep.rownames=TRUE)
+     names(wx.res)=c("otu","detected","p.adjusted")
+     wx.res.sub=wx.res%>%filter(detected==TRUE)%>%select(otu,p.adjusted)
+     if (length(rownames(wx.res.sub))==0){
+       anc2= cbind("No differential otus","NA",paste(combs[,i],collapse = " vs "))
+       colnames(anc2)=c(input$tax,"p.adjusted","compare")
+       anc2}
+     else{
+       colnames(ancW)=NULL
+       ancW=as.vector(wx.res.sub$otu)
+       detc.mat=as(tax_table(phy_sub)[ancW,], "matrix")
+       otu.names=as.data.table(detc.mat,keep.rownames=TRUE)
+     wx.res.sub$compare=paste(combs[,i],collapse = " vs ")
+     wx.res.sub=cbind(otu.names,wx.res.sub)
+     wx.res.sub=wx.res.sub%>%select(input$tax,p.adjusted,compare)
+     wx.res.sub}
+   }
  gg=do.call(rbind,lapply(as.list(nlv), fwfn))   
 gg
     })
 
   kwpr=reactive({
     gg=kwtr()
-    gen.vec=str_squish(unique(gg[,4]))
-    if (length(gen.vec)==0){
-      dlg_message("No differential taxa")$res
-    }
+    gen.vec=t(unique(gg[,1]))
+    gen.vec=gen.vec[gen.vec!="No differential otus"]
+    if (length(gen.vec)==0){paste("No differential otus to plot")}
     else{
+    gen.vec=trimws(gen.vec)
     phy.3.R <- tax_glom(phy.list()[[2]], taxrank=input$tax)
     phy.3.meta=data.table(psmelt(phy.3.R))
     phy.3.meta$tax1=phy.3.meta%>% select(input$tax)
  
     phy.3.meta$gpvar=phy.3.meta%>% select(input$tblvar)
     phy.3.meta$gpvar=as.character(phy.3.meta$gpvar)
-    phy.3.meta$tax1=str_squish(phy.3.meta$tax1)
+    phy.3.meta$tax1=trimws(phy.3.meta$tax1)
     
     phy_sub=dplyr::filter(phy.3.meta,tax1 %in% gen.vec)
   
@@ -474,7 +517,8 @@ gg
       geom_col(position="dodge")  + 
       labs(x=paste(input$tax), y=" Mean Relative abundance") +
       facet_wrap(~tax1,scale="free")
-  }})
+    }
+  })
 
 
   output$kwt=renderTable({
@@ -487,71 +531,82 @@ gg
     kwpr()
   })
 
-  kwtr.wx=reactive({
-    phy.3.R <- tax_glom(phy.list()[[2]], taxrank=input$tax)
-    p3.meta= meta(phy.3.R)
-    p3.taxn=colnames(tax_table(phy.3.R))
-    indx=match(input$tax,p3.taxn)
-    if (indx!=length(p3.taxn)){
-      p3.tax=tax_table(phy.3.R)[,1:indx]
-      p3.otu=otu_table(phy.3.R)
-      phy.3.R=phyloseq(otu_table(p3.otu,taxa_are_rows =FALSE),sample_data(p3.meta),tax_table(p3.tax))
-    }
-    adf=p3.meta%>% select(SampleID,input$tblvar)
-    adf$grpvar=as.factor(adf[,2])
-    lv=levels(adf$grpvar)
-    sample_data(phy.3.R)$grpvar=adf$grpvar  
-    combs=combn(lv,2) 
-    nlv=c(1:(ncol(combs)))
-    fwfn=function(i){
-      kw=test_differential_abundance_Wilcoxon(
-        phy.3.R, group = "grpvar", 
-        compare=combs[,i],p.adjust.method = "fdr")  
-      kwt=kw$table 
-      kwt$compare=paste(combs[,i],collapse = " vs ")
-      kwt=kwt%>%select(compare,Taxon,padj,input$tax)%>%filter(padj <input$num)
-      
-    }
-    ggw=do.call(rbind,lapply(as.list(nlv), fwfn))   
-    ggw
-  })
-  
-  kwpr.wx=reactive({
-    ggw=kwtr.wx()
-    gen.vec=str_squish(unique(ggw[,4]))
-    if (length(gen.vec)==0){
-      dlg_message("No differential taxa")$res
-    }
-    else{
-    phy.3.R <- tax_glom(phy.list()[[2]], taxrank=input$tax)
-    phy.3.meta=data.table(psmelt(phy.3.R))
-    phy.3.meta$tax1=phy.3.meta%>% select(input$tax)
-    
-    phy.3.meta$gpvar=phy.3.meta%>% select(input$tblvar)
-    phy.3.meta$gpvar=as.character(phy.3.meta$gpvar)
-    phy.3.meta$tax1=str_squish(phy.3.meta$tax1)
-    
-    phy_sub=dplyr::filter(phy.3.meta,tax1 %in% gen.vec)
-    
-    pp=phy_sub %>% select(Abundance,tax1,gpvar)%>% 
-      group_by(tax1,gpvar) %>%
-      summarise_at("Abundance",mean) 
-    
-    ggplot(pp["gpvar"!="NA"],aes(x=tax1,y=Abundance,fill=gpvar)) +
-      geom_col(position="dodge")  + 
-      labs(x=paste(input$tax), y=" Mean Relative abundance") +
-      facet_wrap(~tax1,scale="free")
-  }})
-  
-  output$kwt.wx=renderTable({
-    if (input$dispy=="tab")
-      kwtr.wx()
-  })
-  
-  output$kwp.wx=renderPlot({
-    if (input$dispy=="gph")
-      kwpr.wx()
-  })
+  # kwtr.wx=reactive({
+  #   phy.3.R <- tax_glom(phy.list()[[2]], taxrank=input$tax)
+  #   p3.meta= meta(phy.3.R)
+  #   p3.taxn=colnames(tax_table(phy.3.R))
+  #   indx=match(input$tax,p3.taxn)
+  #   if (indx!=length(p3.taxn)){
+  #     p3.tax=tax_table(phy.3.R)[,1:indx]
+  #     p3.otu=otu_table(phy.3.R)
+  #     phy.3.R=phyloseq(otu_table(p3.otu,taxa_are_rows =FALSE),sample_data(p3.meta),tax_table(p3.tax))
+  #   }
+  #   adf=p3.meta%>% select(SampleID,input$tblvar)
+  #   adf$grpvar=as.factor(adf[,2])
+  #   lv=levels(adf$grpvar)
+  #   sample_data(phy.3.R)$grpvar=adf$grpvar  
+  #   combs=combn(lv,2) 
+  #   nlv=c(1:(ncol(combs)))
+  #   fwfn=function(i){
+  #     wx=function(i){pairwise.wilcox.test(i, adf[,3], p.adjust.method = "fdr")}
+  #     wx.list=apply(otu.df, 2,wx)
+  #     wx.list2=lapply(wx.list, function(i){i[3]})
+  #     wx.list3=lapply(wx.list2, function(i){i<input$alpha})
+  #     wx.list3=as.matrix(wx.list3)
+  #     wx.list4=unlist(wx.list2)
+  #     names(wx.list4)=NULL
+  #     wx.res=as.data.table(cbind(wx.list3,wx.list4),keep.rownames=TRUE)
+  #     names(wx.res)=c("otu","detected","p.adjusted")
+  #     wx.res.sub=wx.res%>%filter(detected==TRUE)%>%select(otu,p.adjusted)
+  #     
+  #     kw=test_differential_abundance_Wilcoxon(
+  #       phy.3.R, group = "grpvar", 
+  #       compare=combs[,i],p.adjust.method = "fdr")  
+  #     kwt=kw$table 
+  #     kwt$compare=paste(combs[,i],collapse = " vs ")
+  #     kwt=kwt%>%select(compare,Taxon,padj,input$tax)%>%filter(padj <input$num)
+  #     
+  #   }
+  #   ggw=do.call(rbind,lapply(as.list(nlv), fwfn))   
+  #   ggw
+  # })
+  # 
+  # kwpr.wx=reactive({
+  #   ggw=kwtr.wx()
+  #   gen.vec=str_squish(unique(ggw[,4]))
+  #   if (length(gen.vec)==0){
+  #     dlg_message("No differential taxa")$res
+  #   }
+  #   else{
+  #   phy.3.R <- tax_glom(phy.list()[[2]], taxrank=input$tax)
+  #   phy.3.meta=data.table(psmelt(phy.3.R))
+  #   phy.3.meta$tax1=phy.3.meta%>% select(input$tax)
+  #   
+  #   phy.3.meta$gpvar=phy.3.meta%>% select(input$tblvar)
+  #   phy.3.meta$gpvar=as.character(phy.3.meta$gpvar)
+  #   phy.3.meta$tax1=str_squish(phy.3.meta$tax1)
+  #   
+  #   phy_sub=dplyr::filter(phy.3.meta,tax1 %in% gen.vec)
+  #   
+  #   pp=phy_sub %>% select(Abundance,tax1,gpvar)%>% 
+  #     group_by(tax1,gpvar) %>%
+  #     summarise_at("Abundance",mean) 
+  #   
+  #   ggplot(pp["gpvar"!="NA"],aes(x=tax1,y=Abundance,fill=gpvar)) +
+  #     geom_col(position="dodge")  + 
+  #     labs(x=paste(input$tax), y=" Mean Relative abundance") +
+  #     facet_wrap(~tax1,scale="free")
+  # }})
+  # 
+  # output$kwt.wx=renderTable({
+  #   if (input$dispy=="tab")
+  #     kwtr.wx()
+  # })
+  # 
+  # output$kwp.wx=renderPlot({
+  #   if (input$dispy=="gph")
+  #     kwpr.wx()
+  # })
 
   nbtb.r=reactive({
     phy.3.R <- tax_glom(phy.list()[[3]], taxrank=input$tax)
@@ -670,6 +725,11 @@ gg
                  sig=input$ancAlpha,
                  prev.cut=0.97)
       ancW=anc$W.taxa[,c(1,6)]%>%filter(detected_0.6==TRUE)%>% select(otu.names)
+      if (length(rownames(ancW))==0){
+        anc2= cbind("No differential otus",paste(combs[,i],collapse = " vs "))
+        colnames(anc2)=c(input$tax,"compare")
+        anc2}
+      else{
       colnames(ancW)=NULL
       ancW=as.vector(t(ancW))
       detc.mat=as(tax_table(phy_sub)[ancW,], "matrix")
@@ -677,17 +737,16 @@ gg
       detc.mat.df$compare=paste(combs[,i],collapse = " vs ")
       sigtab=detc.mat.df%>%select(input$tax,compare)
       sigtab
-    }
+    }}
     ggw=do.call(rbind,lapply(as.list(nlv), fwfn))   
     ggw
-  })
+ })
   
   ancpt.r=reactive({
     ggw=anctb.r()
     gen.vec=t(unique(ggw[,1]))
-    if (length(gen.vec)==0){
-      dlg_message("No differential taxa")$res
-    }
+    gen.vec=gen.vec[gen.vec!="No differential otus"]
+    if (length(gen.vec)==0){paste("No differential otus to plot")}
     else{
     phy.3.R <- tax_glom(phy.list()[[2]], taxrank=input$tax)
     phy.3.meta=data.table(psmelt(phy.3.R))
@@ -704,7 +763,10 @@ gg
       geom_col(position="dodge")  + 
       labs(x=paste(input$tax), y=" Mean Relative abundance") +
       facet_wrap(~tax1,scale="free")
-  }})
+    }
+  })
+
+
   output$anc.tb=renderTable({
     if (input$dispy=="tab")
       anctb.r()
