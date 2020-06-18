@@ -1,6 +1,6 @@
-#setwd("~/Documents/Consult/Milk/Analysis/Microbiome/ubiome2")
+setwd("~/Documents/Consult/Milk/Analysis/Microbiome/ubiome2")
 source("Packages.R")
-#source("libs.R")
+source("libs.R")
 source("ANCOM_updated_code.R")
 source("permanova.R")
 
@@ -80,7 +80,7 @@ ui <- fluidPage(
                       helpText("Select a grouping variable under 'Groupby'"),
                       tableOutput("DM")),
              "Differential Taxa",
-             tabPanel("Kruskal Wallis",  radioButtons("tax", 
+             tabPanel("Kruskal Wallis",  selectInput("tax", 
                                   label = "Choose taxanomic level",
                                   choices = c("Phylum", 
                                               "Order",
@@ -99,8 +99,8 @@ ui <- fluidPage(
                                   selected = "fdr"),
                       helpText("Choose method to adjust pvalue for multiple comparisons"),
                       helpText("Select a grouping variable under 'Groupby'"),
-                      sliderInput("num","choose value of alpha", value = 0.01,
-                                   min=0,max=1,step = 0.001),
+                      numericInput("num","choose value of alpha", value = 0.0001,
+                                   min=0,max=1),
                       tableOutput("kwt"),
                       plotOutput("kwp",width="600px")
                       ),
@@ -123,7 +123,7 @@ ui <- fluidPage(
              #  tableOutput("kwt.wx"),
              #  plotOutput("kwp.wx",width="600px")
              # ),
-         tabPanel("Negative Binomial",  radioButtons("tax", 
+         tabPanel("Negative Binomial",  selectInput("tax", 
                     label = "Choose taxanomic level",
                     choices = c("Phylum", 
                                 "Order",
@@ -137,13 +137,13 @@ ui <- fluidPage(
                                              "Graphs"="gph")),
                   #uiOutput("grpselect"),
                   helpText("Select a grouping variable under 'Groupby'"),
-                  sliderInput("num","choose value of alpha", value = 0.1,
+                  numericInput("num","choose value of alpha", value = 0.0001,
                                min=0,max=1,step=0.001),
                   tableOutput("nb.tb"),
                   plotOutput("nb.pt",width="600px")
          ),
          tabPanel("ANCOM", 
-                  radioButtons("tax", 
+                  selectInput("tax", 
                                     label = "Choose taxanomic level",
                                     choices = c("Phylum", 
                                                 "Order",
@@ -157,8 +157,8 @@ ui <- fluidPage(
                                              "Graphs"="gph")),
                   #uiOutput("grpselect"),
                   helpText("Select a grouping variable under 'Groupby'"),
-                  sliderInput("ancAlpha","choose value of alpha", value = 0.1,
-                              min=0,max=1,step=0.001),
+                  numericInput("ancAlpha","choose value of alpha", value = 0.001,
+                              min=0,max=1),
                   tableOutput("anc.tb"),
                   plotOutput("anc.pt",width="600px")
          ) ,id="nav")
@@ -201,18 +201,20 @@ server <- function(input, output,session) {
     output$abPlot <- renderPlot({
         if(input$gp=="geom_bar")
         {
+          
         ff1=function(cc,st){
             cc1=enquo(cc)
             st1=paste(st)
-            physeq3 <- tax_glom(phy.list()[[2]], taxrank=cc)
+            physeq3 <- tax_glom(phy.list()[[2]], taxrank=input$var)
             dat.phy=data.table(psmelt(physeq3))
+            dat.phy$tax1=dat.phy%>% select(input$var)
             # create dataframe from phyloseq object
-            dat.phy1=dat.phy %>% select(Abundance,noquote(eval(cc))) %>% 
-                group_by_(eval(cc)) %>% filter(Abundance>0) %>%
+            dat.phy1=dat.phy %>% select(Abundance,tax1) %>% 
+                group_by(tax1) %>% filter(Abundance>0) %>%
                 summarise_at("Abundance",eval(substitute(st1))) 
             dat.phy1=setorder(dat.phy1,-Abundance)
             dat.phy1=dat.phy1[1:5,]
-            ggplot(dat.phy1,aes(x=get(cc),y=Abundance)) +
+            ggplot(dat.phy1,aes(x=tax1,y=Abundance)) +
                 geom_bar(stat = "identity",position="dodge")  + 
                 labs(x=paste(cc), y=paste(st1, "relative abundance"))
         }
@@ -402,15 +404,18 @@ else
     })
   DMr=reactive({
     #Dirichlet-multinomial Model
-    adf=phy.list()[[4]]%>% select(SampleID,input$tblvar)
+    adf=meta(phy.list()[[3]])
+    adf=adf %>% select(SampleID,input$tblvar)
     adf$grpvar=as.factor(adf[,2])
     lv=levels(adf$grpvar)
-    adf$grpvar=as.character(adf$grpvar)
-    phy.sub=phy.list()[[3]]
-    sample_data(phy.sub$grpvar)=adf$grpvar
+    lvv=as.list(lv)
+    adf$grpvar1=as.character(adf$grpvar)
+    #sample_data(phy.list()[[3]])$grpvar=adf$grpvar
     gg=function(i) {
-      keepTaxa3 =adf[which(adf$grpvar==i),]
+      j=lv[i]
+      keepTaxa3 =adf %>% filter(grpvar ==i)
       miss_samples1=rownames(keepTaxa3)
+      print(head(miss_samples1))
      c.1= prune_samples(sample_names(phy.list()[[3]]) %in% miss_samples1,phy.list()[[3]])
      sub.otu=as(otu_table(c.1),"matrix")
      return(sub.otu)
@@ -429,7 +434,7 @@ else
     DMr()
   })
  kwtr=reactive({
-   phy.3.R <- tax_glom(phy, taxrank=input$tax)
+   phy.3.R <- tax_glom(Phy(), taxrank=input$tax)
    p3.meta= meta(phy.3.R)
    p3.taxn=colnames(tax_table(phy.3.R))
    indx=match(input$tax,p3.taxn)
